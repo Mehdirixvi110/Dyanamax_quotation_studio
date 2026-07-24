@@ -44,7 +44,7 @@ export function useAuditLogs(params: UseAuditLogsParams = {}) {
       if (action) searchParams.set('action', action);
 
       const res = await api.get(`/audit-logs?${searchParams.toString()}`);
-      return res.data;
+      return res.data.data;
     },
   });
 }

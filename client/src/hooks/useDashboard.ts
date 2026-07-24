@@ -17,7 +17,13 @@ export function useRecentQuotations() {
     queryKey: ['recent-quotations'],
     queryFn: async () => {
       const res = await api.get('/quotations?limit=5&sortBy=createdAt&order=desc');
-      return res.data.data.data;
+      // The quotations list endpoint returns { data: [...], meta: {...} }
+      // wrapped by TransformInterceptor: { success, data: { data: [...], meta } }
+      const result = res.data.data;
+      // Handle both shapes: could be the array directly or { data: [...], meta }
+      if (Array.isArray(result)) return result;
+      if (result && Array.isArray(result.data)) return result.data;
+      return [];
     },
   });
 }
@@ -27,7 +33,8 @@ export function useMonthlyActivity() {
     queryKey: ['analytics', 'monthly'],
     queryFn: async () => {
       const res = await api.get('/analytics/monthly');
-      return res.data.data;
+      const result = res.data.data;
+      return Array.isArray(result) ? result : [];
     },
   });
 }

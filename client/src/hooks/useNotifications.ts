@@ -30,7 +30,13 @@ export function useNotifications(page = 1) {
     queryKey: ['notifications', { page }],
     queryFn: async () => {
       const res = await api.get(`/notifications?page=${page}&limit=10`);
-      return res.data;
+      const result = res.data.data;
+      // Handle both wrapped and unwrapped responses
+      if (result && Array.isArray(result.data)) return result;
+      if (result && result.data === undefined) {
+        return { data: [], meta: { page: 1, limit: 10, total: 0, totalPages: 0 } };
+      }
+      return result;
     },
   });
 }
