@@ -1,0 +1,445 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============== ENUMS ==============
+
+enum UserRole {
+  ADMIN
+}
+
+enum QuotationStatus {
+  DRAFT
+  PUBLISHED
+  CLIENT_VIEWED
+  CLIENT_SUBMITTED
+  APPROVED
+  REJECTED
+  EXPIRED
+  ARCHIVED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum TaxApplication {
+  ON_TOTAL
+  ON_LINE_ITEMS
+  NONE
+}
+
+enum MeasurementType {
+  AREA
+  VOLUME
+  LENGTH
+  PERIMETER
+  WEIGHT
+  CUSTOM
+}
+
+enum ActorType {
+  ADMIN
+  CLIENT
+  SYSTEM
+}
+
+enum BackupTrigger {
+  AUTO
+  MANUAL
+}
+
+enum BackupStatus {
+  COMPLETED
+  FAILED
+  IN_PROGRESS
+}
+
+// ============== MODELS ==============
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  fullName      String    @map("full_name")
+  role          UserRole  @default(ADMIN)
+  isActive      Boolean   @default(true) @map("is_active")
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  notifications      Notification[]
+  quotationVersions  QuotationVersion[]
+
+  @@map("users")
+}
+
+model CompanySettings {
+  id                  String   @id @default(uuid())
+  companyName         String   @map("company_name")
+  companyEmail        String?  @map("company_email")
+  companyPhone        String?  @map("company_phone")
+  companyAddress      String?  @map("company_address")
+  logoUrl             String?  @map("logo_url")
+  stampUrl            String?  @map("stamp_url")
+  signatureUrl        String?  @map("signature_url")
+  defaultCurrency     String   @default("PKR") @map("default_currency")
+  defaultTaxPercent   Decimal  @default(0) @map("default_tax_percent") @db.Decimal(5, 2)
+  defaultExpiryDays   Int      @default(15) @map("default_expiry_days")
+  termsAndConditions  String?  @map("terms_and_conditions")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("company_settings")
+}
+
+model Currency {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  symbol    String
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  quotations Quotation[]
+
+  @@map("currencies")
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  sortOrder   Int       @default(0) @map("sort_order")
+  isActive    Boolean   @default(true) @map("is_active")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  items Item[]
+
+  @@map("categories")
+}
+
+model RateTier {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  brands             Brand[]
+  itemRates          ItemRate[]
+  quotationItemRates QuotationItemRate[]
+
+  @@map("rate_tiers")
+}
+
+model Brand {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  rateTierId  String    @map("rate_tier_id")
+  isActive    Boolean   @default(true) @map("is_active")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  rateTier           RateTier            @relation(fields: [rateTierId], references: [id])
+  itemRates          ItemRate[]
+  quotationItemRates QuotationItemRate[]
+
+  @@map("brands")
+}
+
+model Unit {
+  id        String   @id @default(uuid())
+  name      String
+  fullName  String?  @map("full_name")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  items Item[]
+
+  @@map("units")
+}
+
+model Item {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  categoryId  String    @map("category_id")
+  unitId      String    @map("unit_id")
+  isActive    Boolean   @default(true) @map("is_active")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  category       Category        @relation(fields: [categoryId], references: [id])
+  unit           Unit            @relation(fields: [unitId], references: [id])
+  rates          ItemRate[]
+  quotationItems QuotationItem[]
+
+  @@index([categoryId])
+  @@map("items")
+}
+
+model ItemRate {
+  id         String   @id @default(uuid())
+  itemId     String   @map("item_id")
+  rateTierId String   @map("rate_tier_id")
+  brandId    String?  @map("brand_id")
+  rate       Decimal  @db.Decimal(12, 2)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  item     Item     @relation(fields: [itemId], references: [id])
+  rateTier RateTier @relation(fields: [rateTierId], references: [id])
+  brand    Brand?   @relation(fields: [brandId], references: [id])
+
+  @@unique([itemId, rateTierId])
+  @@index([itemId])
+  @@map("item_rates")
+}
+
+model Customer {
+  id        String    @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  company   String?
+  notes     String?
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  quotations Quotation[]
+
+  @@map("customers")
+}
+
+model Quotation {
+  id               String          @id @default(uuid())
+  referenceNumber  String          @unique @map("reference_number")
+  title            String
+  customerId       String?         @map("customer_id")
+  customerName     String          @map("customer_name")
+  customerEmail    String?         @map("customer_email")
+  customerPhone    String?         @map("customer_phone")
+  customerAddress  String?         @map("customer_address")
+  currencyId       String          @map("currency_id")
+  status           QuotationStatus @default(DRAFT)
+  discountType     DiscountType?   @map("discount_type")
+  discountValue    Decimal         @default(0) @map("discount_value") @db.Decimal(12, 2)
+  taxPercent       Decimal         @default(0) @map("tax_percent") @db.Decimal(5, 2)
+  taxApplication   TaxApplication  @default(ON_TOTAL) @map("tax_application")
+  subtotal         Decimal         @default(0) @db.Decimal(14, 2)
+  discountAmount   Decimal         @default(0) @map("discount_amount") @db.Decimal(14, 2)
+  taxAmount        Decimal         @default(0) @map("tax_amount") @db.Decimal(14, 2)
+  grandTotal       Decimal         @default(0) @map("grand_total") @db.Decimal(14, 2)
+  notes            String?
+  termsAndConditions String?       @map("terms_and_conditions")
+  expiryDays       Int             @default(15) @map("expiry_days")
+  publishedAt      DateTime?       @map("published_at")
+  expiresAt        DateTime?       @map("expires_at")
+  submittedAt      DateTime?       @map("submitted_at")
+  approvedAt       DateTime?       @map("approved_at")
+  rejectedAt       DateTime?       @map("rejected_at")
+  currentVersion   Int             @default(0) @map("current_version")
+  deletedAt        DateTime?       @map("deleted_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  customer         Customer?         @relation(fields: [customerId], references: [id])
+  currency         Currency          @relation(fields: [currencyId], references: [id])
+  items            QuotationItem[]
+  versions         QuotationVersion[]
+  clientAccess     ClientAccess?
+  clientSelections ClientSelection[]
+
+  @@index([status])
+  @@index([customerId])
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id                 String    @id @default(uuid())
+  quotationId        String    @map("quotation_id")
+  itemId             String?   @map("item_id")
+  title              String
+  description        String?
+  unitName           String    @map("unit_name")
+  quantity           Decimal   @default(1) @db.Decimal(12, 3)
+  sortOrder          Int       @default(0) @map("sort_order")
+  isSelected         Boolean   @default(true) @map("is_selected")
+  measurementEntryId String?   @map("measurement_entry_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  quotation        Quotation           @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  item             Item?               @relation(fields: [itemId], references: [id])
+  measurementEntry MeasurementEntry?   @relation(fields: [measurementEntryId], references: [id])
+  rates            QuotationItemRate[]
+  clientSelections ClientSelection[]
+
+  @@index([quotationId])
+  @@map("quotation_items")
+}
+
+model QuotationItemRate {
+  id              String   @id @default(uuid())
+  quotationItemId String   @map("quotation_item_id")
+  rateTierId      String   @map("rate_tier_id")
+  brandId         String?  @map("brand_id")
+  brandName       String?  @map("brand_name")
+  rate            Decimal  @db.Decimal(12, 2)
+  isSelected      Boolean  @default(false) @map("is_selected")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  quotationItem    QuotationItem     @relation(fields: [quotationItemId], references: [id], onDelete: Cascade)
+  rateTier         RateTier          @relation(fields: [rateTierId], references: [id])
+  brand            Brand?            @relation(fields: [brandId], references: [id])
+  clientSelections ClientSelection[]
+
+  @@map("quotation_item_rates")
+}
+
+model QuotationVersion {
+  id            String   @id @default(uuid())
+  quotationId   String   @map("quotation_id")
+  versionNumber Int      @map("version_number")
+  snapshotData  Json     @map("snapshot_data")
+  publishedBy   String   @map("published_by")
+  publishedAt   DateTime @map("published_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  publisher User      @relation(fields: [publishedBy], references: [id])
+
+  @@unique([quotationId, versionNumber])
+  @@map("quotation_versions")
+}
+
+model ClientAccess {
+  id              String    @id @default(uuid())
+  quotationId     String    @unique @map("quotation_id")
+  accessCode      String    @unique @map("access_code")
+  passwordHash    String    @map("password_hash")
+  isLocked        Boolean   @default(false) @map("is_locked")
+  isEnabled       Boolean   @default(true) @map("is_enabled")
+  firstAccessedAt DateTime? @map("first_accessed_at")
+  lastAccessedAt  DateTime? @map("last_accessed_at")
+  accessCount     Int       @default(0) @map("access_count")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@map("client_access")
+}
+
+model ClientSelection {
+  id                   String   @id @default(uuid())
+  quotationId          String   @map("quotation_id")
+  quotationItemId      String   @map("quotation_item_id")
+  quotationItemRateId  String?  @map("quotation_item_rate_id")
+  isItemSelected       Boolean  @map("is_item_selected")
+  selectedAt           DateTime @default(now()) @map("selected_at")
+
+  quotation     Quotation          @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotationItem QuotationItem      @relation(fields: [quotationItemId], references: [id], onDelete: Cascade)
+  quotationItemRate QuotationItemRate? @relation(fields: [quotationItemRateId], references: [id])
+
+  @@map("client_selections")
+}
+
+model MeasurementTemplate {
+  id               String    @id @default(uuid())
+  name             String
+  description      String?
+  projectReference String?   @map("project_reference")
+  deletedAt        DateTime? @map("deleted_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  entries MeasurementEntry[]
+
+  @@map("measurement_templates")
+}
+
+model MeasurementEntry {
+  id              String          @id @default(uuid())
+  templateId      String          @map("template_id")
+  roomName        String          @map("room_name")
+  measurementType MeasurementType @map("measurement_type")
+  length          Decimal?        @db.Decimal(10, 3)
+  width           Decimal?        @db.Decimal(10, 3)
+  height          Decimal?        @db.Decimal(10, 3)
+  quantity        Int             @default(1)
+  deduction       Decimal         @default(0) @db.Decimal(10, 3)
+  computedValue   Decimal         @map("computed_value") @db.Decimal(12, 3)
+  unitName        String          @map("unit_name")
+  notes           String?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  template       MeasurementTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  quotationItems QuotationItem[]
+
+  @@map("measurement_entries")
+}
+
+model AuditLog {
+  id         String    @id @default(uuid())
+  userId     String?   @map("user_id")
+  actorType  ActorType @map("actor_type")
+  action     String
+  entityType String    @map("entity_type")
+  entityId   String    @map("entity_id")
+  oldValue   Json?     @map("old_value")
+  newValue   Json?     @map("new_value")
+  metadata   Json?
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  type       String
+  title      String
+  message    String?
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  isRead     Boolean  @default(false) @map("is_read")
+  emailSent  Boolean  @default(false) @map("email_sent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model Backup {
+  id            String       @id @default(uuid())
+  filename      String
+  filePath      String       @map("file_path")
+  fileSizeBytes BigInt       @map("file_size_bytes")
+  triggerType   BackupTrigger @map("trigger_type")
+  status        BackupStatus
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  @@map("backups")
+}

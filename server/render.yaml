@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: quotation-studio-api
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && node dist/main.js
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CLIENT_JWT_SECRET
+        generateValue: true
+      - key: CLIENT_JWT_EXPIRES_IN
+        value: 24h
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_URL
+        sync: false
