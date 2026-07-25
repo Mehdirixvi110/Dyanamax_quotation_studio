@@ -74,6 +74,7 @@ interface AddQuotationItemData {
 interface UpdateQuotationItemData {
   quantity?: number;
   isSelected?: boolean;
+  isLocked?: boolean;
   title?: string;
   description?: string;
 }
@@ -107,9 +108,10 @@ export function useQuotations({
       if (dateTo) params.set('dateTo', dateTo);
 
       const res = await api.get(`/quotations?${params.toString()}`);
+      const result = res.data.data;
       return {
-        quotations: res.data.data,
-        meta: res.data.meta,
+        quotations: Array.isArray(result) ? result : (result?.data ?? []),
+        meta: result?.meta ?? { page: 1, limit: 20, total: 0, totalPages: 0 },
       };
     },
   });
@@ -440,7 +442,9 @@ export function useSearchItems(query: string) {
     queryKey: ['items-search', query],
     queryFn: async () => {
       const res = await api.get(`/items?search=${encodeURIComponent(query)}&limit=20`);
-      return res.data.data as Array<{
+      const result = res.data.data;
+      const items = Array.isArray(result) ? result : (result?.data ?? []);
+      return items as Array<{
         id: string;
         title: string;
         description: string | null;
@@ -467,7 +471,9 @@ export function useCurrencies() {
     queryKey: ['currencies'],
     queryFn: async () => {
       const res = await api.get('/currencies');
-      return res.data.data as Array<{ id: string; code: string; symbol: string; name: string }>;
+      const result = res.data.data;
+      const currencies = Array.isArray(result) ? result : (result?.data ?? []);
+      return currencies as Array<{ id: string; code: string; symbol: string; name: string }>;
     },
   });
 }

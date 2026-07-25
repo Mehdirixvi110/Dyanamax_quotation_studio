@@ -15,14 +15,12 @@ export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
   @Get()
-  async getSettings() {
-    const data = await this.settingsService.getSettings();
-    return { success: true, data };
+  getSettings() {
+    return this.settingsService.getSettings();
   }
 
   @Put()
-  async updateSettings(@Body() dto: UpdateSettingsDto) {
-    const data = await this.settingsService.updateSettings(dto);
-    return { success: true, data };
+  updateSettings(@Body() dto: UpdateSettingsDto) {
+    return this.settingsService.updateSettings(dto);
   }
 }

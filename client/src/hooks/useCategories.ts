@@ -8,7 +8,8 @@ export function useCategories() {
     queryKey: ['categories'],
     queryFn: async () => {
       const res = await api.get('/categories');
-      return res.data.data;
+      const result = res.data.data;
+      return Array.isArray(result) ? result : (result?.data ?? []);
     },
   });
 }

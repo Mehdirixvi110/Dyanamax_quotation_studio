@@ -251,8 +251,9 @@ export class ClientPortalService {
       throw new BadRequestException('Quotation not found');
     }
 
-    if (quotation.status === 'CLIENT_SUBMITTED') {
-      throw new ForbiddenException('Quotation has already been submitted');
+    // Client can re-submit until admin approves/rejects
+    if (quotation.status === 'APPROVED' || quotation.status === 'REJECTED') {
+      throw new ForbiddenException('Quotation has already been finalized by admin');
     }
 
     // Save final selections to client_selections table
@@ -286,11 +287,7 @@ export class ClientPortalService {
       },
     });
 
-    // Lock client access
-    await this.prisma.clientAccess.update({
-      where: { quotationId },
-      data: { isLocked: true },
-    });
+    // Do NOT lock client access — client can re-submit until admin finalizes
 
     return {
       message: 'Quotation submitted successfully',

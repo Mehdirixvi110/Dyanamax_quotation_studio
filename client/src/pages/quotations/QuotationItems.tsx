@@ -9,17 +9,21 @@ import {
   Tooltip,
   Chip,
   Checkbox,
-  FormControlLabel,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
+  Close as CloseIcon,
+  Lock as LockIcon,
+  LockOpen as LockOpenIcon,
 } from '@mui/icons-material';
 import { useUpdateQuotationItem, useDeleteQuotationItem } from '../../hooks/useQuotations';
+import { api } from '../../lib/axios';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { EmptyState } from '../../components/common/EmptyState';
 import { AddItemDialog } from './AddItemDialog';
 import type { QuotationItem } from '../../types';
+import toast from 'react-hot-toast';
 
 interface QuotationItemsProps {
   quotationId: string;
@@ -30,17 +34,32 @@ interface QuotationItemsProps {
 export function QuotationItems({ quotationId, items, isEditable }: QuotationItemsProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+  const [localQuantities, setLocalQuantities] = useState<Record<string, string>>({});
 
   const updateItemMutation = useUpdateQuotationItem();
   const deleteItemMutation = useDeleteQuotationItem();
 
-  const handleQuantityChange = (itemId: string, quantity: number) => {
-    if (quantity < 0) return;
+  const getQuantityValue = (itemId: string, originalQty: number): string => {
+    if (localQuantities[itemId] !== undefined) return localQuantities[itemId];
+    return String(originalQty);
+  };
+
+  const handleQuantityInput = (itemId: string, value: string) => {
+    setLocalQuantities((prev) => ({ ...prev, [itemId]: value }));
+  };
+
+  const handleQuantityBlur = (itemId: string) => {
+    const value = Number(localQuantities[itemId]);
+    if (isNaN(value) || value < 0) {
+      setLocalQuantities((prev) => { const next = { ...prev }; delete next[itemId]; return next; });
+      return;
+    }
     updateItemMutation.mutate({
       quotationId,
       itemId,
-      data: { quantity },
+      data: { quantity: value },
     });
+    setLocalQuantities((prev) => { const next = { ...prev }; delete next[itemId]; return next; });
   };
 
   const handleSelectionChange = (itemId: string, isSelected: boolean) => {
@@ -91,19 +110,32 @@ export function QuotationItems({ quotationId, items, isEditable }: QuotationItem
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                {/* Selection checkbox */}
+                {/* Selection checkbox + Lock */}
                 {isEditable && (
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={item.isSelected}
-                        onChange={(e) => handleSelectionChange(item.id, e.target.checked)}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mr: 0.5 }}>
+                    <Checkbox
+                      checked={item.isSelected}
+                      onChange={(e) => handleSelectionChange(item.id, e.target.checked)}
+                      size="small"
+                    />
+                    <Tooltip title={item.isLocked ? 'Locked — client cannot deselect. Click to unlock.' : 'Unlocked — client can deselect. Click to lock.'}>
+                      <IconButton
                         size="small"
-                      />
-                    }
-                    label=""
-                    sx={{ m: 0, mr: 0.5 }}
-                  />
+                        onClick={() => {
+                          updateItemMutation.mutate({
+                            quotationId,
+                            itemId: item.id,
+                            data: { isLocked: !item.isLocked },
+                          });
+                        }}
+                      >
+                        {item.isLocked
+                          ? <LockIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+                          : <LockOpenIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                        }
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                 )}
 
                 {/* Item details */}
@@ -130,6 +162,15 @@ export function QuotationItems({ quotationId, items, isEditable }: QuotationItem
                           size="small"
                           color={rate.isSelected ? 'primary' : 'default'}
                           variant={rate.isSelected ? 'filled' : 'outlined'}
+                          onDelete={isEditable && item.rates && item.rates.length > 1 ? async () => {
+                            try {
+                              await api.delete(`/quotations/${quotationId}/items/${item.id}/rates/${rate.id}`);
+                              toast.success('Rate option removed');
+                              // Trigger refetch by invalidating
+                              window.dispatchEvent(new Event('quotation-updated'));
+                            } catch { toast.error('Failed to remove rate'); }
+                          } : undefined}
+                          deleteIcon={isEditable && item.rates && item.rates.length > 1 ? <CloseIcon fontSize="small" /> : undefined}
                         />
                       ))}
                     </Box>
@@ -142,8 +183,9 @@ export function QuotationItems({ quotationId, items, isEditable }: QuotationItem
                     <TextField
                       label="Qty"
                       type="number"
-                      value={item.quantity}
-                      onChange={(e) => handleQuantityChange(item.id, Number(e.target.value))}
+                      value={getQuantityValue(item.id, item.quantity)}
+                      onChange={(e) => handleQuantityInput(item.id, e.target.value)}
+                      onBlur={() => handleQuantityBlur(item.id)}
                       size="small"
                       sx={{ width: 80 }}
                       slotProps={{

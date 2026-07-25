@@ -153,6 +153,7 @@ export interface QuotationItem {
   quantity: number;
   sortOrder: number;
   isSelected: boolean;
+  isLocked: boolean;
   rates?: QuotationItemRate[];
   createdAt: string;
   updatedAt: string;

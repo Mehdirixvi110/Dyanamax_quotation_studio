@@ -170,7 +170,29 @@ export function PublishDialog({ open, onClose, quotationId, expiryDays }: Publis
         ) : (
           <>
             <Button variant="outlined" onClick={handleCopy} startIcon={<CopyIcon />}>
-              Copy Credentials
+              Copy
+            </Button>
+            <Button
+              variant="outlined"
+              color="success"
+              onClick={() => {
+                const loginUrl = `${window.location.origin}/client/login`;
+                const text = `Your Quotation is ready!\n\nLogin: ${loginUrl}\nAccess Code: ${credentials.accessCode}\nPassword: ${credentials.password}`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+              }}
+            >
+              WhatsApp
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                const loginUrl = `${window.location.origin}/client/login`;
+                const subject = 'Your Quotation Credentials';
+                const body = `Your Quotation is ready!\n\nLogin URL: ${loginUrl}\nAccess Code: ${credentials.accessCode}\nPassword: ${credentials.password}`;
+                window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+              }}
+            >
+              Email
             </Button>
             <Button variant="contained" onClick={handleClose}>
               Done

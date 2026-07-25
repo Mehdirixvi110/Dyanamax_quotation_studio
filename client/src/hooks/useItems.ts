@@ -26,9 +26,10 @@ export function useItems({ page = 1, limit = 20, search = '', categoryId = '' }:
       if (categoryId) params.set('categoryId', categoryId);
 
       const res = await api.get(`/items?${params.toString()}`);
+      const result = res.data.data;
       return {
-        items: res.data.data,
-        meta: res.data.meta,
+        items: Array.isArray(result) ? result : (result?.data ?? []),
+        meta: result?.meta ?? { page: 1, limit: 20, total: 0, totalPages: 0 },
       };
     },
   });
@@ -135,7 +136,8 @@ export function useRateTiers() {
     queryKey: ['rate-tiers'],
     queryFn: async () => {
       const res = await api.get('/rate-tiers');
-      return res.data.data;
+      const result = res.data.data;
+      return Array.isArray(result) ? result : (result?.data ?? []);
     },
   });
 }
@@ -146,7 +148,8 @@ export function useBrands(rateTierId?: string) {
     queryFn: async () => {
       const url = rateTierId ? `/brands?rateTierId=${rateTierId}` : '/brands';
       const res = await api.get(url);
-      return res.data.data;
+      const result = res.data.data;
+      return Array.isArray(result) ? result : (result?.data ?? []);
     },
   });
 }
@@ -156,7 +159,8 @@ export function useUnits() {
     queryKey: ['units'],
     queryFn: async () => {
       const res = await api.get('/units');
-      return res.data.data;
+      const result = res.data.data;
+      return Array.isArray(result) ? result : (result?.data ?? []);
     },
   });
 }

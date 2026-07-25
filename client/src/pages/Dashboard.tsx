@@ -241,8 +241,8 @@ export function DashboardPage() {
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={statusLabels[q.status]}
-                              color={statusColors[q.status]}
+                              label={statusLabels[(q.status?.toLowerCase() ?? 'draft') as QuotationStatus] ?? q.status}
+                              color={statusColors[(q.status?.toLowerCase() ?? 'draft') as QuotationStatus] ?? 'default'}
                               size="small"
                               variant="outlined"
                             />

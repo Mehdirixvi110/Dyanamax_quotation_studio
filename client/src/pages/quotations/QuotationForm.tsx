@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { Save as SaveIcon } from '@mui/icons-material';
 import { useUpdateQuotation } from '../../hooks/useQuotations';
+import { useCustomers } from '../../hooks/useCustomers';
 import type { Quotation } from '../../types';
 
 interface QuotationFormProps {
@@ -39,6 +40,7 @@ export function QuotationForm({ quotation, isEditable }: QuotationFormProps) {
   );
 
   const updateMutation = useUpdateQuotation();
+  const { data: customersData } = useCustomers({ limit: 100 });
 
   const handleSave = () => {
     updateMutation.mutate({
@@ -48,14 +50,14 @@ export function QuotationForm({ quotation, isEditable }: QuotationFormProps) {
         customerName: customerName.trim(),
         customerEmail: customerEmail.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
-        discountType: discountType || undefined,
+        discountType: discountType ? discountType.toUpperCase() : undefined,
         discountValue: discountValue ? Number(discountValue) : 0,
         taxPercent: taxPercent ? Number(taxPercent) : 0,
-        taxApplication: taxApplication as 'on_total' | 'on_line_items' | 'none',
+        taxApplication: taxApplication ? taxApplication.toUpperCase() : 'ON_TOTAL',
         expiryDays: expiryDays ? Number(expiryDays) : 30,
         notes: notes.trim() || undefined,
         termsAndConditions: termsAndConditions.trim() || undefined,
-      },
+      } as any,
     });
   };
 
@@ -74,6 +76,28 @@ export function QuotationForm({ quotation, isEditable }: QuotationFormProps) {
           fullWidth
           disabled={!isEditable}
         />
+        <FormControl size="small" fullWidth disabled={!isEditable}>
+          <InputLabel>Select Customer</InputLabel>
+          <Select
+            value=""
+            label="Select Customer"
+            onChange={(e) => {
+              const cust = customersData?.customers.find((c) => c.id === e.target.value);
+              if (cust) {
+                setCustomerName(cust.name);
+                setCustomerEmail(cust.email || '');
+                setCustomerPhone(cust.phone || '');
+              }
+            }}
+          >
+            <MenuItem value="">— Manual Entry —</MenuItem>
+            {customersData?.customers.map((c) => (
+              <MenuItem key={c.id} value={c.id}>
+                {c.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
         <TextField
           label="Customer Name"
           value={customerName}

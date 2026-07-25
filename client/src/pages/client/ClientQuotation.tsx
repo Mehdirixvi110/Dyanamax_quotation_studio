@@ -67,9 +67,10 @@ export function ClientQuotationPage() {
     }
   };
 
-  // Initialize selections from quotation data
+  // Initialize selections from quotation data (only on first load)
+  const [initialized, setInitialized] = useState(false);
   useEffect(() => {
-    if (data?.quotation.items) {
+    if (data?.quotation.items && !initialized) {
       const selMap = new Map<string, ItemSelection>();
       data.quotation.items.forEach((item) => {
         const selectedRate = item.rates?.find((r) => r.isSelected);
@@ -80,8 +81,9 @@ export function ClientQuotationPage() {
         });
       });
       setSelections(selMap);
+      setInitialized(true);
     }
-  }, [data]);
+  }, [data, initialized]);
 
   const syncSelections = useCallback(
     (newSelections: Map<string, ItemSelection>) => {
@@ -168,27 +170,44 @@ export function ClientQuotationPage() {
   if (!data) return null;
 
   const { quotation, companySettings } = data;
-  const isLocked = quotation.status !== 'published' && quotation.status !== 'client_viewed';
+  const statusLower = (quotation.status || '').toLowerCase();
+  const isLocked = statusLower === 'approved' || statusLower === 'rejected' || statusLower === 'archived';
 
-  if (submitted || quotation.status === 'client_submitted') {
+  // If admin has approved, show final state. Rejected = can re-select
+  if (statusLower === 'approved') {
     return (
       <Box sx={{ textAlign: 'center', py: 8 }}>
         <SubmitIcon sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
         <Typography variant="h4" sx={{ mb: 1 }}>
-          Quotation Submitted
+          Quotation Approved
         </Typography>
         <Typography color="text.secondary" sx={{ maxWidth: 480, mx: 'auto' }}>
-          Thank you! Your selections have been submitted successfully. The company will review
-          your choices and get back to you shortly.
+          Your selections have been approved by the company. They will be in touch soon.
         </Typography>
       </Box>
     );
   }
 
+  const isSubmitted = submitted || statusLower === 'client_submitted';
+  const isRejected = statusLower === 'rejected';
   const estimatedTotal = calculateTotal();
 
   return (
     <Box>
+      {/* Submitted banner */}
+      {isSubmitted && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          Your selections have been submitted. You can still make changes and re-submit until the company finalizes the quotation.
+        </Alert>
+      )}
+
+      {/* Rejected banner */}
+      {isRejected && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Your previous selections were not accepted. Please review, adjust your choices, and re-submit.
+        </Alert>
+      )}
+
       {/* Company header */}
       {companySettings && (
         <Paper sx={{ p: 3, mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -252,13 +271,14 @@ export function ClientQuotationPage() {
                   <Checkbox
                     checked={isItemSelected}
                     onChange={(e) => handleItemToggle(item.id, e.target.checked)}
-                    disabled={isLocked}
+                    disabled={isLocked || item.isLocked}
                   />
                   <Box sx={{ flex: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                       <Typography variant="body1" sx={{ fontWeight: 500 }}>
                         {item.title}
                       </Typography>
+                      {item.isLocked && <Chip label="Required" size="small" color="warning" variant="outlined" />}
                       <Chip label={item.unitName} size="small" variant="outlined" />
                       <Chip label={`Qty: ${item.quantity}`} size="small" />
                     </Box>
@@ -358,11 +378,11 @@ export function ClientQuotationPage() {
               disabled={submitMutation.isPending}
               sx={{ px: 6 }}
             >
-              {submitMutation.isPending ? 'Submitting...' : 'Submit My Selections'}
+              {submitMutation.isPending ? 'Submitting...' : isSubmitted ? 'Re-submit Selections' : 'Submit My Selections'}
             </Button>
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            Once submitted, your selections will be locked and sent for review.
+            You can change your selections and re-submit anytime until the company finalizes.
           </Typography>
         </Box>
       )}

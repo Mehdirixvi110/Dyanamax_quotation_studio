@@ -33,10 +33,11 @@ interface StatusChipProps {
 }
 
 export function StatusChip({ status, size = 'small', variant = 'outlined' }: StatusChipProps) {
+  const normalizedStatus = (status?.toLowerCase() ?? 'draft') as QuotationStatus;
   return (
     <Chip
-      label={statusLabels[status]}
-      color={statusColors[status]}
+      label={statusLabels[normalizedStatus] ?? status}
+      color={statusColors[normalizedStatus] ?? 'default'}
       size={size}
       variant={variant}
     />

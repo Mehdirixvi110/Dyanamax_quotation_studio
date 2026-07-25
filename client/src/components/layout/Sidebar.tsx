@@ -7,6 +7,7 @@ import {
   Box,
   Typography,
   Divider,
+  Avatar,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -20,6 +21,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUiStore } from '../../stores/ui.store';
+import { useSettings } from '../../hooks/useSettings';
 
 interface SidebarProps {
   width: number;
@@ -40,6 +42,7 @@ export function Sidebar({ width }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const { data: settings } = useSettings();
 
   return (
     <Drawer
@@ -58,9 +61,16 @@ export function Sidebar({ width }: SidebarProps) {
         },
       }}
     >
-      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, color: 'white' }}>
-          Quotation Studio
+      <Box sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+        {settings?.logoUrl ? (
+          <Avatar
+            variant="rounded"
+            src={settings.logoUrl}
+            sx={{ width: 32, height: 32 }}
+          />
+        ) : null}
+        <Typography variant="body1" sx={{ fontWeight: 700, color: 'white', fontSize: '0.95rem' }}>
+          {settings?.companyName || 'Quotation Studio'}
         </Typography>
       </Box>
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.15)' }} />

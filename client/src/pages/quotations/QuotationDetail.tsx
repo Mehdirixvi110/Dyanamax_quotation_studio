@@ -95,9 +95,9 @@ export function QuotationDetailPage() {
     );
   }
 
-  const status = quotation.status as QuotationStatus;
-  const isEditable = status === 'draft';
-  const canPublish = status === 'draft';
+  const status = (quotation.status?.toLowerCase() ?? 'draft') as QuotationStatus;
+  const isEditable = status !== 'archived';
+  const canPublish = ['draft', 'published', 'client_viewed', 'client_submitted', 'rejected'].includes(status);
   const canApprove = status === 'client_submitted';
   const canReject = status === 'client_submitted';
   const canArchive = ['approved', 'rejected', 'expired'].includes(status);
@@ -225,6 +225,9 @@ export function QuotationDetailPage() {
                     Code: <strong>{quotation.clientAccess.accessCode}</strong>
                   </Typography>
                   <Typography variant="body2">
+                    Password: <strong>(reset to reveal)</strong>
+                  </Typography>
+                  <Typography variant="body2">
                     Status: {quotation.clientAccess.isLocked ? 'Locked' : quotation.clientAccess.isEnabled ? 'Active' : 'Disabled'}
                   </Typography>
                   <Typography variant="body2">
@@ -234,6 +237,55 @@ export function QuotationDetailPage() {
                     <Typography variant="caption" color="text.secondary">
                       Last accessed: {formatDate(quotation.clientAccess.lastAccessedAt)}
                     </Typography>
+                  )}
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    sx={{ mt: 1, alignSelf: 'flex-start' }}
+                    onClick={async () => {
+                      try {
+                        const res = await import('../../lib/axios').then(m => m.api.put(`/quotations/${quotation.id}/client-access`, { resetPassword: true }));
+                        const newPass = res.data?.data?.newPassword;
+                        if (newPass) {
+                          toast.success(`New password: ${newPass}`);
+                        } else {
+                          toast.success('Password reset successfully');
+                        }
+                      } catch {
+                        toast.error('Failed to reset password');
+                      }
+                    }}
+                  >
+                    Reset & Show Password
+                  </Button>
+                  {quotation.clientAccess.isEnabled ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={async () => {
+                        try {
+                          await import('../../lib/axios').then(m => m.api.put(`/quotations/${quotation.id}/client-access`, { isEnabled: false }));
+                          toast.success('Client access disabled');
+                        } catch { toast.error('Failed'); }
+                      }}
+                    >
+                      Disable Access
+                    </Button>
+                  ) : (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="success"
+                      onClick={async () => {
+                        try {
+                          await import('../../lib/axios').then(m => m.api.put(`/quotations/${quotation.id}/client-access`, { isEnabled: true }));
+                          toast.success('Client access enabled');
+                        } catch { toast.error('Failed'); }
+                      }}
+                    >
+                      Enable Access
+                    </Button>
                   )}
                 </Box>
               </Paper>

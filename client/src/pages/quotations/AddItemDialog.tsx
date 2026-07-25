@@ -35,7 +35,7 @@ export function AddItemDialog({ open, onClose, quotationId }: AddItemDialogProps
   const [manualQuantity, setManualQuantity] = useState('1');
   const [manualRate, setManualRate] = useState('');
 
-  const { data: searchResults, isLoading: searching } = useSearchItems(searchQuery);
+  const { data: searchResults, isLoading: searching } = useSearchItems(searchQuery || ' ');
   const addItemMutation = useAddQuotationItem();
 
   const handleAddFromLibrary = (item: NonNullable<typeof searchResults>[number]) => {
@@ -175,9 +175,9 @@ export function AddItemDialog({ open, onClose, quotationId }: AddItemDialogProps
               </List>
             )}
 
-            {!searchQuery && (
+            {!searchQuery && !searching && searchResults && searchResults.length === 0 && (
               <Typography color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
-                Start typing to search items from the cost library
+                No items in the cost library yet
               </Typography>
             )}
           </Box>

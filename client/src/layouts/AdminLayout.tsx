@@ -4,7 +4,7 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { TopBar } from '../components/layout/TopBar';
 import { useUiStore } from '../stores/ui.store';
 
-const SIDEBAR_WIDTH = 260;
+const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 0;
 
 export function AdminLayout() {
@@ -25,7 +25,7 @@ export function AdminLayout() {
         }}
       >
         <TopBar />
-        <Box sx={{ p: 3, flexGrow: 1 }}>
+        <Box sx={{ px: 2, py: 2, flexGrow: 1 }}>
           <Outlet />
         </Box>
       </Box>

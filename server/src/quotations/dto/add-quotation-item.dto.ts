@@ -92,6 +92,9 @@ export class UpdateQuotationItemDto {
   isSelected?: boolean;
 
   @IsOptional()
+  isLocked?: boolean;
+
+  @IsOptional()
   @IsString()
   measurementEntryId?: string;
 }

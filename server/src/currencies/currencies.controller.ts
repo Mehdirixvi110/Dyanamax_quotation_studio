@@ -19,26 +19,22 @@ export class CurrenciesController {
   constructor(private readonly currenciesService: CurrenciesService) {}
 
   @Get()
-  async findAll() {
-    const data = await this.currenciesService.findAll();
-    return { success: true, data };
+  findAll() {
+    return this.currenciesService.findAll();
   }
 
   @Post()
-  async create(@Body() dto: CreateCurrencyDto) {
-    const data = await this.currenciesService.create(dto);
-    return { success: true, data };
+  create(@Body() dto: CreateCurrencyDto) {
+    return this.currenciesService.create(dto);
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdateCurrencyDto) {
-    const data = await this.currenciesService.update(id, dto);
-    return { success: true, data };
+  update(@Param('id') id: string, @Body() dto: UpdateCurrencyDto) {
+    return this.currenciesService.update(id, dto);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    await this.currenciesService.remove(id);
-    return { success: true, data: null };
+  remove(@Param('id') id: string) {
+    return this.currenciesService.remove(id);
   }
 }

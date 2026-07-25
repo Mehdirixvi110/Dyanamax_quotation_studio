@@ -17,8 +17,8 @@ export function ClientLoginPage() {
 
     try {
       const res = await api.post('/client/login', { accessCode, password });
-      const { accessToken } = res.data.data;
-      localStorage.setItem('clientToken', accessToken);
+      const { token } = res.data.data;
+      localStorage.setItem('clientToken', token);
       navigate('/client/quotation');
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: { message?: string } } } };

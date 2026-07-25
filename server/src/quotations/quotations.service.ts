@@ -464,6 +464,7 @@ export class QuotationsService {
         ...(dto.quantity !== undefined && { quantity: dto.quantity }),
         ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
         ...(dto.isSelected !== undefined && { isSelected: dto.isSelected }),
+        ...(dto.isLocked !== undefined && { isLocked: dto.isLocked }),
         ...(dto.measurementEntryId !== undefined && {
           measurementEntryId: dto.measurementEntryId || null,
         }),
@@ -637,6 +638,12 @@ export class QuotationsService {
   async approve(quotationId: string) {
     await this.findOne(quotationId);
 
+    // Lock client access on approval
+    await this.prisma.clientAccess.updateMany({
+      where: { quotationId },
+      data: { isLocked: true },
+    });
+
     return this.prisma.quotation.update({
       where: { id: quotationId },
       data: {
@@ -650,6 +657,7 @@ export class QuotationsService {
   async reject(quotationId: string) {
     await this.findOne(quotationId);
 
+    // Do NOT lock client access — let client re-select after rejection
     return this.prisma.quotation.update({
       where: { id: quotationId },
       data: {

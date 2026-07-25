@@ -280,6 +280,7 @@ model QuotationItem {
   quantity           Decimal   @default(1) @db.Decimal(12, 3)
   sortOrder          Int       @default(0) @map("sort_order")
   isSelected         Boolean   @default(true) @map("is_selected")
+  isLocked           Boolean   @default(false) @map("is_locked")
   measurementEntryId String?   @map("measurement_entry_id")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")

@@ -50,14 +50,38 @@ export class PdfService {
       // ─── Company Header ───────────────────────────────────────────────
       let y = 50;
 
-      doc
-        .fontSize(18)
-        .font('Helvetica-Bold')
-        .text(settings.companyName || 'Company Name', leftMargin, y, {
-          width: contentWidth,
-          align: 'center',
-        });
-      y += 25;
+      // Logo
+      if (settings.logoUrl && settings.logoUrl.startsWith('data:image')) {
+        try {
+          const logoBuffer = Buffer.from(settings.logoUrl.split(',')[1], 'base64');
+          doc.image(logoBuffer, leftMargin, y, { height: 40, fit: [80, 40] });
+          doc
+            .fontSize(18)
+            .font('Helvetica-Bold')
+            .text(settings.companyName || 'Company Name', leftMargin + 90, y + 10, {
+              width: contentWidth - 90,
+            });
+          y += 50;
+        } catch {
+          doc
+            .fontSize(18)
+            .font('Helvetica-Bold')
+            .text(settings.companyName || 'Company Name', leftMargin, y, {
+              width: contentWidth,
+              align: 'center',
+            });
+          y += 25;
+        }
+      } else {
+        doc
+          .fontSize(18)
+          .font('Helvetica-Bold')
+          .text(settings.companyName || 'Company Name', leftMargin, y, {
+            width: contentWidth,
+            align: 'center',
+          });
+        y += 25;
+      }
 
       const contactParts: string[] = [];
       if (settings.companyAddress) contactParts.push(settings.companyAddress);
@@ -365,6 +389,17 @@ export class PdfService {
       doc.fontSize(10).font('Helvetica-Bold').text('Authorized Signature', leftMargin, y);
       y += 30;
 
+      // Signature image
+      if (settings.signatureUrl && settings.signatureUrl.startsWith('data:image')) {
+        try {
+          const sigBuffer = Buffer.from(settings.signatureUrl.split(',')[1], 'base64');
+          doc.image(sigBuffer, leftMargin, y - 25, { height: 40, fit: [150, 40] });
+          y += 20;
+        } catch {
+          // ignore
+        }
+      }
+
       doc
         .moveTo(leftMargin, y)
         .lineTo(leftMargin + 200, y)
@@ -384,8 +419,18 @@ export class PdfService {
 
       y += 25;
 
-      // Stamp placeholder
-      doc.fontSize(8).font('Helvetica').text('[Company Stamp]', leftMargin, y);
+      // Stamp image
+      if (settings.stampUrl && settings.stampUrl.startsWith('data:image')) {
+        try {
+          const stampBuffer = Buffer.from(settings.stampUrl.split(',')[1], 'base64');
+          doc.image(stampBuffer, leftMargin, y, { height: 50, fit: [80, 50] });
+          y += 55;
+        } catch {
+          doc.fontSize(8).font('Helvetica').text('[Company Stamp]', leftMargin, y);
+        }
+      } else {
+        doc.fontSize(8).font('Helvetica').text('[Company Stamp]', leftMargin, y);
+      }
 
       // ─── Footer ───────────────────────────────────────────────────────
       const bottomY = 780;

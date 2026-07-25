@@ -24,9 +24,10 @@ export function useCustomers({ page = 1, limit = 20, search = '' }: UseCustomers
       if (search) params.set('search', search);
 
       const res = await api.get(`/customers?${params.toString()}`);
+      const result = res.data.data;
       return {
-        customers: res.data.data,
-        meta: res.data.meta,
+        customers: Array.isArray(result) ? result : (result?.data ?? []),
+        meta: result?.meta ?? { page: 1, limit: 20, total: 0, totalPages: 0 },
       };
     },
   });

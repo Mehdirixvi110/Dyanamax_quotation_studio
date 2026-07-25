@@ -74,9 +74,10 @@ export function useTemplates({ page = 1, limit = 20, search = '' }: UseTemplates
       if (search) params.set('search', search);
 
       const res = await api.get(`/measurements?${params.toString()}`);
+      const result = res.data.data;
       return {
-        templates: res.data.data,
-        meta: res.data.meta,
+        templates: Array.isArray(result) ? result : (result?.data ?? []),
+        meta: result?.meta ?? { page: 1, limit: 20, total: 0, totalPages: 0 },
       };
     },
   });

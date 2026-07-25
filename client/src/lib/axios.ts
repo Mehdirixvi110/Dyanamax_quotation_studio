@@ -12,7 +12,7 @@ export const api = axios.create({
 // Request interceptor — attach JWT token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  if (token) {
+  if (token && !config.headers.Authorization) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -23,9 +23,21 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      const requestUrl = error.config?.url || '';
+      // If it's a client portal request, redirect to client login
+      if (requestUrl.includes('/client/')) {
+        localStorage.removeItem('clientToken');
+        if (!window.location.pathname.startsWith('/client/login')) {
+          window.location.href = '/client/login';
+        }
+      } else {
+        // Admin request — redirect to admin login
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
+      }
     }
     return Promise.reject(error);
   },
