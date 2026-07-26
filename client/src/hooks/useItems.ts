@@ -338,3 +338,52 @@ export function useDeleteUnit() {
     },
   });
 }
+
+
+// ===== CSV Import/Export =====
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
+export async function downloadTemplate() {
+  const res = await api.get('/items/template/csv', { responseType: 'blob' });
+  triggerDownload(res.data, 'items-template.csv');
+}
+
+export async function exportItems() {
+  const res = await api.get('/items/export/csv', { responseType: 'blob' });
+  triggerDownload(res.data, 'items-export.csv');
+}
+
+export function useImportItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post('/items/import/csv', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data.data as { created: number; updated: number; errors: string[] };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      toast.success(`Import complete: ${data.created} created, ${data.updated} updated`);
+      if (data.errors.length > 0) {
+        toast.error(`${data.errors.length} rows had errors`);
+      }
+    },
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { error?: { message?: string } } } };
+      toast.error(err.response?.data?.error?.message || 'Import failed');
+    },
+  });
+}

@@ -8,8 +8,15 @@ import {
   Param,
   Query,
   UseGuards,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { ItemsService } from './items.service';
+import { ItemsCsvService } from './items-csv.service';
 import { CreateItemDto, CreateItemRateDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -25,11 +32,40 @@ class ItemsQueryDto extends PaginationDto {
 @Controller('items')
 @UseGuards(JwtAuthGuard)
 export class ItemsController {
-  constructor(private readonly itemsService: ItemsService) {}
+  constructor(
+    private readonly itemsService: ItemsService,
+    private readonly itemsCsvService: ItemsCsvService,
+  ) {}
 
   @Post()
   create(@Body() dto: CreateItemDto) {
     return this.itemsService.create(dto);
+  }
+
+  // CSV endpoints — must come BEFORE :id routes
+  @Get('template/csv')
+  async downloadTemplate(@Res() res: Response) {
+    const csv = await this.itemsCsvService.getTemplate();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="items-template.csv"');
+    res.send(csv);
+  }
+
+  @Get('export/csv')
+  async exportCsv(@Res() res: Response) {
+    const csv = await this.itemsCsvService.exportItems();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="items-export.csv"');
+    res.send(csv);
+  }
+
+  @Post('import/csv')
+  @UseInterceptors(FileInterceptor('file'))
+  async importCsv(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    return this.itemsCsvService.importItems(file.buffer);
   }
 
   @Get('search')

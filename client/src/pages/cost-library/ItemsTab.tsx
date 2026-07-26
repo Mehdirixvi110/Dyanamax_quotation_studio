@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Box,
   IconButton,
@@ -15,14 +15,17 @@ import {
   Delete as DeleteIcon,
   ContentCopy as DuplicateIcon,
   Add as AddIcon,
+  Download as DownloadIcon,
+  Upload as UploadIcon,
 } from '@mui/icons-material';
 import { SearchBar } from '../../components/common/SearchBar';
 import { DataTable, type Column } from '../../components/common/DataTable';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
-import { useItems, useDeleteItem, useDuplicateItem } from '../../hooks/useItems';
+import { useItems, useDeleteItem, useDuplicateItem, useImportItems, downloadTemplate, exportItems } from '../../hooks/useItems';
 import { useCategories } from '../../hooks/useCategories';
 import { ItemFormModal } from './ItemFormModal';
 import type { Item } from '../../types';
+import toast from 'react-hot-toast';
 
 export function ItemsTab() {
   const [page, setPage] = useState(0);
@@ -37,6 +40,9 @@ export function ItemsTab() {
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<Item | null>(null);
 
+  // CSV file input ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Queries & Mutations
   const { data, isLoading } = useItems({
     page: page + 1,
@@ -48,6 +54,7 @@ export function ItemsTab() {
   const { data: categories } = useCategories();
   const deleteMutation = useDeleteItem();
   const duplicateMutation = useDuplicateItem();
+  const importMutation = useImportItems();
 
   const handleOpenCreate = () => {
     setEditingItem(null);
@@ -73,6 +80,31 @@ export function ItemsTab() {
 
   const handleDuplicate = (item: Item) => {
     duplicateMutation.mutate(item.id);
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      await downloadTemplate();
+    } catch {
+      toast.error('Failed to download template');
+    }
+  };
+
+  const handleExportItems = async () => {
+    try {
+      await exportItems();
+    } catch {
+      toast.error('Failed to export items');
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      importMutation.mutate(file);
+    }
+    // Reset input so same file can be re-uploaded
+    e.target.value = '';
   };
 
   const columns: Column<Item>[] = [
@@ -169,6 +201,16 @@ export function ItemsTab() {
           </Select>
         </FormControl>
         <Box sx={{ flexGrow: 1 }} />
+        <Button variant="outlined" size="small" startIcon={<DownloadIcon />} onClick={handleDownloadTemplate} sx={{ mr: 1 }}>
+          Template
+        </Button>
+        <Button variant="outlined" size="small" startIcon={<DownloadIcon />} onClick={handleExportItems} sx={{ mr: 1 }}>
+          Export
+        </Button>
+        <Button variant="outlined" size="small" startIcon={<UploadIcon />} onClick={() => fileInputRef.current?.click()} sx={{ mr: 1 }}>
+          Import CSV
+        </Button>
+        <input ref={fileInputRef} type="file" accept=".csv" hidden onChange={handleFileUpload} />
         <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
           Add Item
         </Button>
