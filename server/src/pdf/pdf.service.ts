@@ -17,7 +17,7 @@ export class PdfService {
         items: {
           orderBy: { sortOrder: 'asc' },
           include: {
-            rates: true,
+            rates: { include: { rateTier: true, brand: true } },
           },
         },
         currency: true,
@@ -29,456 +29,310 @@ export class PdfService {
     }
 
     const settings = await this.settingsService.getSettings();
+    const rateTiers = await this.prisma.rateTier.findMany({ orderBy: { sortOrder: 'asc' } });
 
-    return this.buildPdf(quotation, settings);
+    return this.buildPdf(quotation, settings, rateTiers);
   }
 
-  private buildPdf(quotation: any, settings: any): Promise<Buffer> {
+  private buildPdf(quotation: any, settings: any, rateTiers: any[]): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const doc = new PDFDocument({ margin: 40, size: 'A4' });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', (err: Error) => reject(err));
 
-      const pageWidth = 595.28; // A4 width in points
-      const contentWidth = pageWidth - 100; // margins
-      const leftMargin = 50;
-      const rightEdge = pageWidth - 50;
+      const pageWidth = 595.28;
+      const leftM = 40;
+      const rightEdge = pageWidth - 40;
+      const contentWidth = rightEdge - leftM;
 
-      // ─── Company Header ───────────────────────────────────────────────
-      let y = 50;
+      let y = 40;
 
-      // Logo
+      // ─── HEADER: Company Info (left) + Logo (right) ───────────────────
+      // Company name bold
+      doc.fontSize(14).font('Helvetica-Bold').text(settings.companyName || 'Company', leftM, y);
+      y += 18;
+
+      doc.fontSize(8).font('Helvetica');
+      if (settings.companyAddress) {
+        doc.text(`Address: ${settings.companyAddress}`, leftM, y);
+        y += 11;
+      }
+      if (settings.companyPhone) {
+        doc.text(`Contact:  ${settings.companyPhone}`, leftM, y);
+        y += 11;
+      }
+      if (settings.companyEmail) {
+        doc.text(`Email:    ${settings.companyEmail}`, leftM, y);
+        y += 11;
+      }
+
+      // Logo (top-right)
       if (settings.logoUrl && settings.logoUrl.startsWith('data:image')) {
         try {
           const logoBuffer = Buffer.from(settings.logoUrl.split(',')[1], 'base64');
-          doc.image(logoBuffer, leftMargin, y, { height: 40, fit: [80, 40] });
-          doc
-            .fontSize(18)
-            .font('Helvetica-Bold')
-            .text(settings.companyName || 'Company Name', leftMargin + 90, y + 10, {
-              width: contentWidth - 90,
-            });
-          y += 50;
-        } catch {
-          doc
-            .fontSize(18)
-            .font('Helvetica-Bold')
-            .text(settings.companyName || 'Company Name', leftMargin, y, {
-              width: contentWidth,
-              align: 'center',
-            });
-          y += 25;
-        }
-      } else {
-        doc
-          .fontSize(18)
-          .font('Helvetica-Bold')
-          .text(settings.companyName || 'Company Name', leftMargin, y, {
-            width: contentWidth,
-            align: 'center',
-          });
-        y += 25;
+          doc.image(logoBuffer, rightEdge - 100, 40, { width: 90, height: 50, fit: [90, 50] });
+        } catch { /* ignore logo errors */ }
       }
 
-      const contactParts: string[] = [];
-      if (settings.companyAddress) contactParts.push(settings.companyAddress);
-      if (settings.companyPhone) contactParts.push(settings.companyPhone);
-      if (settings.companyEmail) contactParts.push(settings.companyEmail);
-
-      if (contactParts.length > 0) {
-        doc
-          .fontSize(9)
-          .font('Helvetica')
-          .text(contactParts.join('  |  '), leftMargin, y, {
-            width: contentWidth,
-            align: 'center',
-          });
-        y += 15;
-      }
-
-      // Divider line
       y += 10;
-      doc.moveTo(leftMargin, y).lineTo(rightEdge, y).lineWidth(1).stroke('#333333');
-      y += 20;
 
-      // ─── Quotation Title ──────────────────────────────────────────────
-      doc
-        .fontSize(16)
-        .font('Helvetica-Bold')
-        .text('QUOTATION', leftMargin, y, {
-          width: contentWidth,
-          align: 'center',
-        });
-      y += 30;
+      // ─── QUOTE BOX (right side) + CUSTOMER BOX (left side) ────────────
+      const boxTop = y;
+      const boxHeight = 60;
+      const leftBoxWidth = contentWidth * 0.55;
+      const rightBoxX = leftM + leftBoxWidth + 10;
+      const rightBoxWidth = contentWidth - leftBoxWidth - 10;
 
-      // ─── Reference / Date / Status ────────────────────────────────────
-      const refDateY = y;
-      doc.fontSize(10).font('Helvetica');
-
-      doc.font('Helvetica-Bold').text('Reference:', leftMargin, refDateY);
-      doc
-        .font('Helvetica')
-        .text(quotation.referenceNumber, leftMargin + 70, refDateY);
-
-      doc.font('Helvetica-Bold').text('Date:', leftMargin + 250, refDateY);
-      doc
-        .font('Helvetica')
-        .text(this.formatDate(quotation.createdAt), leftMargin + 285, refDateY);
-
-      y += 18;
-
-      doc.font('Helvetica-Bold').text('Status:', leftMargin, y);
-      doc
-        .font('Helvetica')
-        .text(this.formatStatus(quotation.status), leftMargin + 70, y);
-
-      doc.font('Helvetica-Bold').text('Expiry:', leftMargin + 250, y);
-      doc
-        .font('Helvetica')
-        .text(
-          quotation.expiresAt
-            ? this.formatDate(quotation.expiresAt)
-            : `${quotation.expiryDays} days`,
-          leftMargin + 285,
-          y,
-        );
-
-      y += 18;
-
-      if (quotation.title) {
-        doc.font('Helvetica-Bold').text('Title:', leftMargin, y);
-        doc.font('Helvetica').text(quotation.title, leftMargin + 70, y);
-        y += 18;
-      }
-
-      // Divider
-      y += 10;
-      doc.moveTo(leftMargin, y).lineTo(rightEdge, y).lineWidth(0.5).stroke('#999999');
-      y += 15;
-
-      // ─── Customer Information ─────────────────────────────────────────
-      doc.fontSize(11).font('Helvetica-Bold').text('CUSTOMER', leftMargin, y);
-      y += 18;
-      doc.fontSize(10).font('Helvetica');
-
-      if (quotation.customerName) {
-        doc.font('Helvetica-Bold').text('Name:', leftMargin, y);
-        doc.font('Helvetica').text(quotation.customerName, leftMargin + 70, y);
-        y += 15;
-      }
-      if (quotation.customerEmail) {
-        doc.font('Helvetica-Bold').text('Email:', leftMargin, y);
-        doc.font('Helvetica').text(quotation.customerEmail, leftMargin + 70, y);
-        y += 15;
+      // Customer box (left)
+      doc.rect(leftM, boxTop, leftBoxWidth, boxHeight).fillAndStroke('#f5f5f5', '#ddd');
+      doc.fillColor('#000');
+      doc.fontSize(8).font('Helvetica-Bold').text('Customer', leftM + 5, boxTop + 5);
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`Name : ${quotation.customerName || ''}`, leftM + 5, boxTop + 18);
+      if (quotation.customerAddress) {
+        doc.text(`Address : ${quotation.customerAddress}`, leftM + 5, boxTop + 30);
       }
       if (quotation.customerPhone) {
-        doc.font('Helvetica-Bold').text('Phone:', leftMargin, y);
-        doc.font('Helvetica').text(quotation.customerPhone, leftMargin + 70, y);
-        y += 15;
-      }
-      if (quotation.customerAddress) {
-        doc.font('Helvetica-Bold').text('Address:', leftMargin, y);
-        doc.font('Helvetica').text(quotation.customerAddress, leftMargin + 70, y);
-        y += 15;
+        doc.text(`Contact : ${quotation.customerPhone}`, leftM + 5, boxTop + 42);
       }
 
-      // Divider
-      y += 10;
-      doc.moveTo(leftMargin, y).lineTo(rightEdge, y).lineWidth(0.5).stroke('#999999');
-      y += 15;
+      // Quote box (right)
+      doc.rect(rightBoxX, boxTop, rightBoxWidth, boxHeight).fillAndStroke('#fff', '#ddd');
+      doc.fillColor('#000');
+      doc.fontSize(9).font('Helvetica-Bold').text('Quote', rightBoxX + 5, boxTop + 3, { width: rightBoxWidth - 10, align: 'center' });
+      doc.fontSize(7).font('Helvetica');
+      const qDetails = [
+        ['Date:', this.formatDate(quotation.createdAt)],
+        ['Quote #', quotation.referenceNumber],
+        ['Valid Until', quotation.expiresAt ? this.formatDate(quotation.expiresAt) : `${quotation.expiryDays} days`],
+      ];
+      let qy = boxTop + 16;
+      for (const [label, value] of qDetails) {
+        doc.font('Helvetica-Bold').text(label, rightBoxX + 5, qy, { continued: false });
+        doc.font('Helvetica').text(value, rightBoxX + 60, qy);
+        qy += 12;
+      }
 
-      // ─── Items Table ──────────────────────────────────────────────────
-      const colX = {
-        num: leftMargin,
-        item: leftMargin + 30,
-        unit: leftMargin + 230,
-        qty: leftMargin + 280,
-        rate: leftMargin + 330,
-        total: leftMargin + 410,
+      y = boxTop + boxHeight + 20;
+
+      // ─── QUOTATION TITLE ──────────────────────────────────────────────
+      doc.fontSize(11).font('Helvetica-Bold').text(
+        quotation.title || 'Quotation',
+        leftM, y, { width: contentWidth, align: 'center' },
+      );
+      y += 20;
+
+      // ─── TABLE HEADER ─────────────────────────────────────────────────
+      // Columns: Sr | Work Item | Description | Unit | Qty | Rates per tier...
+      const tierCount = rateTiers.length;
+      const rateColWidth = tierCount > 0 ? Math.min(65, (contentWidth * 0.35) / tierCount) : 65;
+
+      const cols = {
+        sr: { x: leftM, w: 20 },
+        item: { x: leftM + 22, w: 80 },
+        desc: { x: leftM + 104, w: contentWidth - 104 - 30 - 35 - (rateColWidth * tierCount) },
+        unit: { x: 0, w: 30 },
+        qty: { x: 0, w: 35 },
       };
-      const tableRight = rightEdge;
+      cols.desc.w = Math.max(cols.desc.w, 100);
+      cols.unit.x = cols.desc.x + cols.desc.w;
+      cols.qty.x = cols.unit.x + cols.unit.w;
 
-      // Table header
-      doc.fontSize(9).font('Helvetica-Bold');
-      doc.text('#', colX.num, y, { width: 25 });
-      doc.text('Item', colX.item, y, { width: 195 });
-      doc.text('Unit', colX.unit, y, { width: 45 });
-      doc.text('Qty', colX.qty, y, { width: 45, align: 'right' });
-      doc.text('Rate', colX.rate, y, { width: 75, align: 'right' });
-      doc.text('Total', colX.total, y, { width: 85, align: 'right' });
+      const rateStartX = cols.qty.x + cols.qty.w;
 
-      y += 15;
-      doc.moveTo(leftMargin, y).lineTo(tableRight, y).lineWidth(0.5).stroke('#333333');
-      y += 8;
+      // Draw table header
+      const headerH = 25;
+      doc.rect(leftM, y, contentWidth, headerH).fillAndStroke('#333', '#333');
+      doc.fillColor('#fff').fontSize(7).font('Helvetica-Bold');
+      doc.text('Sr.', cols.sr.x + 3, y + 8, { width: cols.sr.w });
+      doc.text('Work Item', cols.item.x + 2, y + 8, { width: cols.item.w });
+      doc.text('Detailed Description', cols.desc.x + 2, y + 8, { width: cols.desc.w });
+      doc.text('Unit', cols.unit.x + 2, y + 8, { width: cols.unit.w });
+      doc.text('Qty', cols.qty.x + 2, y + 8, { width: cols.qty.w, align: 'center' });
 
-      // Table rows
-      doc.font('Helvetica').fontSize(9);
+      for (let i = 0; i < rateTiers.length; i++) {
+        const rx = rateStartX + i * rateColWidth;
+        doc.text(`Rates (${rateTiers[i].name})`, rx + 2, y + 4, { width: rateColWidth - 4, align: 'center' });
+      }
+
+      doc.fillColor('#000');
+      y += headerH;
+
+      // ─── TABLE ROWS ───────────────────────────────────────────────────
       const items = quotation.items || [];
 
-      if (items.length === 0) {
-        doc.text('No items in this quotation', leftMargin, y, {
-          width: contentWidth,
-          align: 'center',
-        });
-        y += 20;
-      } else {
-        items.forEach((item: any, idx: number) => {
-          // Check if we need a new page
-          if (y > 700) {
-            doc.addPage();
-            y = 50;
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const quantity = Number(item.quantity);
+
+        // Estimate row height
+        const descText = item.description || '';
+        const descLines = Math.ceil(descText.length / 50) || 1;
+        const rowH = Math.max(30, descLines * 10 + 15);
+
+        // Check page break
+        if (y + rowH + 30 > 750) {
+          doc.addPage();
+          y = 40;
+        }
+
+        // Alternating row bg
+        if (idx % 2 === 0) {
+          doc.rect(leftM, y, contentWidth, rowH).fill('#fafafa');
+        }
+
+        doc.fillColor('#000').fontSize(7).font('Helvetica');
+        doc.text(String(idx + 1), cols.sr.x + 3, y + 5, { width: cols.sr.w });
+        doc.font('Helvetica-Bold').text(item.title, cols.item.x + 2, y + 5, { width: cols.item.w - 4 });
+        doc.font('Helvetica').text(descText, cols.desc.x + 2, y + 5, { width: cols.desc.w - 4 });
+        doc.text(item.unitName || '', cols.unit.x + 2, y + 5, { width: cols.unit.w });
+        doc.text(String(quantity), cols.qty.x + 2, y + 5, { width: cols.qty.w, align: 'center' });
+
+        // Rate per tier
+        for (let i = 0; i < rateTiers.length; i++) {
+          const rx = rateStartX + i * rateColWidth;
+          const rate = item.rates?.find((r: any) => r.rateTierId === rateTiers[i].id);
+          if (rate) {
+            doc.text(this.formatNum(Number(rate.rate)), rx + 2, y + 5, { width: rateColWidth - 4, align: 'right' });
           }
+        }
 
-          const selectedRate = this.getSelectedRate(item);
-          const quantity = Number(item.quantity);
-          const rate = selectedRate ? Number(selectedRate.rate) : 0;
-          const lineTotal = quantity * rate;
+        y += rowH;
 
-          doc.text(String(idx + 1), colX.num, y, { width: 25 });
-          doc.text(item.title || '', colX.item, y, { width: 195 });
-          doc.text(item.unitName || '', colX.unit, y, { width: 45 });
-          doc.text(this.formatNumber(quantity), colX.qty, y, {
-            width: 45,
-            align: 'right',
-          });
-          doc.text(this.formatCurrency(rate), colX.rate, y, {
-            width: 75,
-            align: 'right',
-          });
-          doc.text(this.formatCurrency(lineTotal), colX.total, y, {
-            width: 85,
-            align: 'right',
-          });
+        // Item Total row
+        doc.rect(leftM, y, contentWidth, 15).fill('#f0f0f0');
+        doc.fillColor('#000').fontSize(7).font('Helvetica-Bold');
+        doc.text('Item Total', cols.qty.x - 40, y + 3, { width: 75, align: 'right' });
 
-          y += 16;
+        for (let i = 0; i < rateTiers.length; i++) {
+          const rx = rateStartX + i * rateColWidth;
+          const rate = item.rates?.find((r: any) => r.rateTierId === rateTiers[i].id);
+          if (rate) {
+            const total = quantity * Number(rate.rate);
+            doc.text(this.formatNum(total), rx + 2, y + 3, { width: rateColWidth - 4, align: 'right' });
+          }
+        }
+        y += 18;
 
-          // Light row separator
-          doc
-            .moveTo(leftMargin, y - 3)
-            .lineTo(tableRight, y - 3)
-            .lineWidth(0.3)
-            .stroke('#CCCCCC');
-        });
+        // Row separator
+        doc.moveTo(leftM, y).lineTo(rightEdge, y).lineWidth(0.3).stroke('#ddd');
+        y += 5;
       }
 
-      // Table bottom line
-      y += 5;
-      doc.moveTo(leftMargin, y).lineTo(tableRight, y).lineWidth(0.5).stroke('#333333');
-      y += 15;
+      // ─── CATEGORY WISE TOTAL ──────────────────────────────────────────
+      y += 10;
+      if (y > 700) { doc.addPage(); y = 40; }
 
-      // ─── Financial Summary ────────────────────────────────────────────
-      if (y > 680) {
-        doc.addPage();
-        y = 50;
+      doc.rect(leftM, y, contentWidth, 18).fill('#f5f5f5');
+      doc.fillColor('#000').fontSize(8).font('Helvetica-Bold');
+      doc.text('TOTAL', cols.qty.x - 40, y + 4, { width: 75, align: 'right' });
+
+      for (let i = 0; i < rateTiers.length; i++) {
+        const rx = rateStartX + i * rateColWidth;
+        let tierTotal = 0;
+        for (const item of items) {
+          const rate = item.rates?.find((r: any) => r.rateTierId === rateTiers[i].id);
+          if (rate) {
+            tierTotal += Number(item.quantity) * Number(rate.rate);
+          }
+        }
+        doc.text(this.formatNum(tierTotal), rx + 2, y + 4, { width: rateColWidth - 4, align: 'right' });
       }
+      y += 25;
 
-      const summaryLabelX = leftMargin + 300;
-      const summaryValueX = leftMargin + 410;
-      const summaryValueWidth = 85;
+      // ─── FINANCIAL SUMMARY ────────────────────────────────────────────
+      if (y > 700) { doc.addPage(); y = 40; }
 
       const subtotal = Number(quotation.subtotal);
       const discountAmount = Number(quotation.discountAmount);
       const taxAmount = Number(quotation.taxAmount);
       const grandTotal = Number(quotation.grandTotal);
 
-      doc.fontSize(10).font('Helvetica');
-      doc.text('Subtotal:', summaryLabelX, y, { width: 100, align: 'right' });
-      doc.text(this.formatCurrency(subtotal), summaryValueX, y, {
-        width: summaryValueWidth,
-        align: 'right',
-      });
-      y += 18;
-
-      if (discountAmount > 0) {
-        doc.text('Discount:', summaryLabelX, y, { width: 100, align: 'right' });
-        doc
-          .fillColor('#CC0000')
-          .text(`-${this.formatCurrency(discountAmount)}`, summaryValueX, y, {
-            width: summaryValueWidth,
-            align: 'right',
-          });
-        doc.fillColor('#000000');
-        y += 18;
+      if (discountAmount > 0 || taxAmount > 0) {
+        const sumX = rightEdge - 180;
+        doc.fontSize(8).font('Helvetica');
+        doc.text('Subtotal:', sumX, y, { width: 80, align: 'right' });
+        doc.text(this.formatNum(subtotal), sumX + 85, y, { width: 80, align: 'right' });
+        y += 14;
+        if (discountAmount > 0) {
+          doc.text('Discount:', sumX, y, { width: 80, align: 'right' });
+          doc.text(`-${this.formatNum(discountAmount)}`, sumX + 85, y, { width: 80, align: 'right' });
+          y += 14;
+        }
+        if (taxAmount > 0) {
+          doc.text(`Tax (${Number(quotation.taxPercent)}%):`, sumX, y, { width: 80, align: 'right' });
+          doc.text(this.formatNum(taxAmount), sumX + 85, y, { width: 80, align: 'right' });
+          y += 14;
+        }
+        doc.moveTo(sumX, y).lineTo(rightEdge, y).lineWidth(0.5).stroke('#333');
+        y += 5;
+        doc.font('Helvetica-Bold').fontSize(9);
+        doc.text('TOTAL AMOUNT', sumX, y, { width: 80, align: 'right' });
+        doc.text(this.formatNum(grandTotal), sumX + 85, y, { width: 80, align: 'right' });
+        y += 14;
+        doc.fontSize(7).font('Helvetica').text('Exclusive of all taxes', sumX + 85, y, { width: 80, align: 'right' });
+        y += 20;
       }
 
-      if (taxAmount > 0) {
-        const taxLabel = `Tax (${Number(quotation.taxPercent)}%):`;
-        doc.text(taxLabel, summaryLabelX, y, { width: 100, align: 'right' });
-        doc.text(this.formatCurrency(taxAmount), summaryValueX, y, {
-          width: summaryValueWidth,
-          align: 'right',
-        });
-        y += 18;
-      }
-
-      // Grand total separator
-      doc
-        .moveTo(summaryLabelX, y)
-        .lineTo(rightEdge, y)
-        .lineWidth(1)
-        .stroke('#333333');
-      y += 10;
-
-      doc.fontSize(12).font('Helvetica-Bold');
-      doc.text('GRAND TOTAL:', summaryLabelX, y, { width: 100, align: 'right' });
-      doc.text(this.formatCurrency(grandTotal), summaryValueX, y, {
-        width: summaryValueWidth,
-        align: 'right',
-      });
-      y += 30;
-
-      // Currency note
-      const currencyCode = quotation.currency?.code || 'PKR';
-      doc
-        .fontSize(8)
-        .font('Helvetica')
-        .text(`All amounts in ${currencyCode}`, summaryLabelX, y, {
-          width: summaryValueWidth + 100,
-          align: 'right',
-        });
-      y += 25;
-
-      // ─── Terms & Conditions ───────────────────────────────────────────
-      if (y > 650) {
-        doc.addPage();
-        y = 50;
-      }
+      // ─── TERMS & CONDITIONS ───────────────────────────────────────────
+      if (y > 720) { doc.addPage(); y = 40; }
 
       const terms = quotation.termsAndConditions || settings.termsAndConditions;
       if (terms) {
-        doc
-          .moveTo(leftMargin, y)
-          .lineTo(rightEdge, y)
-          .lineWidth(0.5)
-          .stroke('#999999');
-        y += 15;
-
-        doc.fontSize(11).font('Helvetica-Bold').text('Terms & Conditions', leftMargin, y);
-        y += 18;
-
-        doc.fontSize(9).font('Helvetica');
-        const termsLines = terms.split('\n');
-        termsLines.forEach((line: string) => {
-          if (y > 740) {
-            doc.addPage();
-            y = 50;
-          }
-          doc.text(line.trim(), leftMargin, y, { width: contentWidth });
-          y += 13;
+        doc.moveTo(leftM, y).lineTo(rightEdge, y).lineWidth(0.5).stroke('#E8A838');
+        y += 5;
+        doc.fontSize(8).font('Helvetica-Bold').text('Terms and conditions:', leftM, y);
+        y += 12;
+        doc.fontSize(7).font('Helvetica');
+        terms.split('\n').forEach((line: string) => {
+          if (y > 760) { doc.addPage(); y = 40; }
+          doc.text(line.trim(), leftM, y, { width: contentWidth });
+          y += 10;
         });
         y += 10;
       }
 
-      // ─── Signature Area ───────────────────────────────────────────────
-      if (y > 680) {
-        doc.addPage();
-        y = 50;
-      }
+      // ─── SIGNATURE & STAMP ────────────────────────────────────────────
+      if (y > 700) { doc.addPage(); y = 40; }
 
-      y += 20;
-      doc
-        .moveTo(leftMargin, y)
-        .lineTo(rightEdge, y)
-        .lineWidth(0.5)
-        .stroke('#999999');
-      y += 25;
-
-      doc.fontSize(10).font('Helvetica-Bold').text('Authorized Signature', leftMargin, y);
-      y += 30;
-
-      // Signature image
+      // Signature
       if (settings.signatureUrl && settings.signatureUrl.startsWith('data:image')) {
         try {
-          const sigBuffer = Buffer.from(settings.signatureUrl.split(',')[1], 'base64');
-          doc.image(sigBuffer, leftMargin, y - 25, { height: 40, fit: [150, 40] });
-          y += 20;
-        } catch {
-          // ignore
-        }
+          const sigBuf = Buffer.from(settings.signatureUrl.split(',')[1], 'base64');
+          doc.image(sigBuf, leftM, y, { height: 35, fit: [120, 35] });
+        } catch { /* ignore */ }
       }
 
-      doc
-        .moveTo(leftMargin, y)
-        .lineTo(leftMargin + 200, y)
-        .lineWidth(0.5)
-        .stroke('#333333');
-      y += 5;
-
-      doc.fontSize(8).font('Helvetica').text('Signature', leftMargin, y);
-
-      // Date line
-      doc
-        .moveTo(leftMargin + 280, y - 5)
-        .lineTo(leftMargin + 420, y - 5)
-        .lineWidth(0.5)
-        .stroke('#333333');
-      doc.text('Date', leftMargin + 280, y);
-
-      y += 25;
-
-      // Stamp image
+      // Stamp (right side)
       if (settings.stampUrl && settings.stampUrl.startsWith('data:image')) {
         try {
-          const stampBuffer = Buffer.from(settings.stampUrl.split(',')[1], 'base64');
-          doc.image(stampBuffer, leftMargin, y, { height: 50, fit: [80, 50] });
-          y += 55;
-        } catch {
-          doc.fontSize(8).font('Helvetica').text('[Company Stamp]', leftMargin, y);
-        }
-      } else {
-        doc.fontSize(8).font('Helvetica').text('[Company Stamp]', leftMargin, y);
+          const stampBuf = Buffer.from(settings.stampUrl.split(',')[1], 'base64');
+          doc.image(stampBuf, rightEdge - 90, y, { height: 40, fit: [80, 40] });
+        } catch { /* ignore */ }
       }
 
-      // ─── Footer ───────────────────────────────────────────────────────
-      const bottomY = 780;
-      doc
-        .fontSize(8)
-        .font('Helvetica')
-        .fillColor('#666666')
-        .text(
-          `Generated on ${this.formatDate(new Date())} | ${settings.companyName}`,
-          leftMargin,
-          bottomY,
-          { width: contentWidth, align: 'center' },
-        );
+      y += 50;
+
+      // ─── FOOTER ───────────────────────────────────────────────────────
+      doc.fontSize(7).font('Helvetica').fillColor('#666')
+        .text(`If you have any query feel free to contact us`, leftM, y, { width: contentWidth, align: 'center' });
+      y += 10;
+      doc.font('Helvetica-Bold').fillColor('#333')
+        .text(`${settings.companyPhone || ''} | ${settings.companyEmail || ''}`, leftM, y, { width: contentWidth, align: 'center' });
 
       doc.end();
     });
   }
 
-  private getSelectedRate(item: any): any {
-    if (!item.rates || item.rates.length === 0) return null;
-    const selected = item.rates.find((r: any) => r.isSelected);
-    return selected || item.rates[0];
-  }
-
-  private formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-PK', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  }
-
-  private formatNumber(num: number): string {
-    if (Number.isInteger(num)) return String(num);
-    return num.toFixed(2);
+  private formatNum(num: number): string {
+    return new Intl.NumberFormat('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(num);
   }
 
   private formatDate(date: Date | string): string {
     const d = typeof date === 'string' ? new Date(date) : date;
-    return d.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  }
-
-  private formatStatus(status: string): string {
-    return status
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' });
   }
 }
