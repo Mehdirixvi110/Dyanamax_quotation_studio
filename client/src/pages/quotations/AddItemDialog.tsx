@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -6,17 +6,21 @@ import {
   Box,
   TextField,
   Typography,
-  List,
-  ListItemButton,
-  ListItemText,
   Chip,
   CircularProgress,
   Tabs,
   Tab,
   Button,
   DialogActions,
+  Checkbox,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Badge,
 } from '@mui/material';
 import { useSearchItems, useAddQuotationItem } from '../../hooks/useQuotations';
+import { useCategories } from '../../hooks/useCategories';
 
 interface AddItemDialogProps {
   open: boolean;
@@ -27,6 +31,8 @@ interface AddItemDialogProps {
 export function AddItemDialog({ open, onClose, quotationId }: AddItemDialogProps) {
   const [tab, setTab] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Manual entry state
   const [manualTitle, setManualTitle] = useState('');
@@ -36,20 +42,35 @@ export function AddItemDialog({ open, onClose, quotationId }: AddItemDialogProps
   const [manualRate, setManualRate] = useState('');
 
   const { data: searchResults, isLoading: searching } = useSearchItems(searchQuery || ' ');
+  const { data: categories } = useCategories();
   const addItemMutation = useAddQuotationItem();
 
-  const handleAddFromLibrary = (item: NonNullable<typeof searchResults>[number]) => {
-    addItemMutation.mutate(
-      {
+  // Filter results by category
+  const filteredResults = (searchResults || []).filter((item) => {
+    if (!categoryFilter) return true;
+    return item.category?.name?.toLowerCase() === categoryFilter.toLowerCase();
+  });
+
+  const toggleItem = (itemId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  };
+
+  const handleAddSelected = async () => {
+    for (const itemId of selectedIds) {
+      await addItemMutation.mutateAsync({
         quotationId,
-        data: { itemId: item.id },
-      },
-      {
-        onSuccess: () => {
-          setSearchQuery('');
-        },
-      },
-    );
+        data: { itemId },
+      });
+    }
+    setSelectedIds(new Set());
   };
 
   const handleAddManual = () => {
@@ -83,13 +104,19 @@ export function AddItemDialog({ open, onClose, quotationId }: AddItemDialogProps
   };
 
   const handleClose = () => {
-    setSearchQuery('');
-    setTab(0);
+    setSelectedIds(new Set());
     onClose();
   };
 
+  // Reset selections when dialog opens
+  useEffect(() => {
+    if (open) {
+      setSelectedIds(new Set());
+    }
+  }, [open]);
+
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>Add Item to Quotation</DialogTitle>
       <DialogContent sx={{ p: 0 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 3 }}>
@@ -99,15 +126,31 @@ export function AddItemDialog({ open, onClose, quotationId }: AddItemDialogProps
 
         {tab === 0 && (
           <Box sx={{ p: 3 }}>
-            <TextField
-              fullWidth
-              placeholder="Search items by name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              size="small"
-              autoFocus
-              sx={{ mb: 2 }}
-            />
+            {/* Search + Category Filter */}
+            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+              <TextField
+                fullWidth
+                placeholder="Search items by name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                size="small"
+              />
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={categoryFilter}
+                  label="Category"
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                >
+                  <MenuItem value="">All Categories</MenuItem>
+                  {categories?.map((cat) => (
+                    <MenuItem key={cat.id} value={cat.name}>
+                      {cat.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
 
             {searching && (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
@@ -115,24 +158,41 @@ export function AddItemDialog({ open, onClose, quotationId }: AddItemDialogProps
               </Box>
             )}
 
-            {!searching && searchQuery && searchResults && searchResults.length === 0 && (
+            {!searching && filteredResults.length === 0 && (
               <Typography color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
-                No items found matching "{searchQuery}"
+                No items found
               </Typography>
             )}
 
-            {searchResults && searchResults.length > 0 && (
-              <List sx={{ maxHeight: 360, overflow: 'auto' }}>
-                {searchResults.map((item) => (
-                  <ListItemButton
-                    key={item.id}
-                    onClick={() => handleAddFromLibrary(item)}
-                    disabled={addItemMutation.isPending}
-                    sx={{ borderRadius: 1, mb: 0.5 }}
-                  >
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {/* Item list with checkboxes */}
+            {filteredResults.length > 0 && (
+              <Box sx={{ maxHeight: 400, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                {filteredResults.map((item) => {
+                  const isChecked = selectedIds.has(item.id);
+                  return (
+                    <Box
+                      key={item.id}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 1,
+                        p: 1.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: isChecked ? 'action.selected' : 'transparent',
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: isChecked ? 'action.selected' : 'action.hover' },
+                        '&:last-child': { borderBottom: 'none' },
+                      }}
+                      onClick={() => toggleItem(item.id)}
+                    >
+                      <Checkbox
+                        checked={isChecked}
+                        size="small"
+                        sx={{ mt: -0.5 }}
+                      />
+                      <Box sx={{ flex: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
                             {item.title}
                           </Typography>
@@ -140,45 +200,28 @@ export function AddItemDialog({ open, onClose, quotationId }: AddItemDialogProps
                             <Chip label={item.unit.name} size="small" variant="outlined" />
                           )}
                         </Box>
-                      }
-                      secondary={
-                        <Box sx={{ mt: 0.5 }}>
-                          {item.category && (
-                            <Typography variant="caption" color="text.secondary">
-                              {item.category.name}
-                            </Typography>
-                          )}
-                          {item.rates && item.rates.length > 0 && (
-                            <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
-                              {item.rates.slice(0, 3).map((r) => (
-                                <Chip
-                                  key={r.id}
-                                  label={`${r.rateTier?.name || 'Rate'}: ${r.rate.toLocaleString()}`}
-                                  size="small"
-                                  variant="outlined"
-                                />
-                              ))}
-                              {item.rates.length > 3 && (
-                                <Chip
-                                  label={`+${item.rates.length - 3} more`}
-                                  size="small"
-                                  variant="outlined"
-                                />
-                              )}
-                            </Box>
-                          )}
-                        </Box>
-                      }
-                    />
-                  </ListItemButton>
-                ))}
-              </List>
-            )}
-
-            {!searchQuery && !searching && searchResults && searchResults.length === 0 && (
-              <Typography color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
-                No items in the cost library yet
-              </Typography>
+                        {item.category && (
+                          <Typography variant="caption" color="text.secondary">
+                            {item.category.name}
+                          </Typography>
+                        )}
+                        {item.rates && item.rates.length > 0 && (
+                          <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
+                            {item.rates.map((r) => (
+                              <Chip
+                                key={r.id}
+                                label={`${r.rateTier?.name || 'Rate'}: ${r.rate.toLocaleString()}`}
+                                size="small"
+                                variant="outlined"
+                              />
+                            ))}
+                          </Box>
+                        )}
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
             )}
           </Box>
         )}
@@ -237,6 +280,17 @@ export function AddItemDialog({ open, onClose, quotationId }: AddItemDialogProps
 
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={handleClose}>Close</Button>
+        {tab === 0 && selectedIds.size > 0 && (
+          <Badge badgeContent={selectedIds.size} color="primary">
+            <Button
+              variant="contained"
+              onClick={handleAddSelected}
+              disabled={addItemMutation.isPending}
+            >
+              {addItemMutation.isPending ? 'Adding...' : `Add Selected (${selectedIds.size})`}
+            </Button>
+          </Badge>
+        )}
         {tab === 1 && (
           <Button
             variant="contained"
