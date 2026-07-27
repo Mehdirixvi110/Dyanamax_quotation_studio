@@ -43,7 +43,6 @@ export class PdfController {
       'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Length': buffer.length.toString(),
     });
-
     res.end(buffer);
   }
 
@@ -54,7 +53,6 @@ export class PdfController {
     @Res() res: Response,
   ): Promise<void> {
     const quotationId = req.user?.quotationId;
-
     if (!quotationId) {
       throw new NotFoundException('Quotation not found');
     }
@@ -68,7 +66,7 @@ export class PdfController {
       throw new NotFoundException('Quotation not found');
     }
 
-    const buffer = await this.pdfService.generateQuotationPdf(quotationId);
+    const buffer = await this.pdfService.generateClientPdf(quotationId);
     const filename = `quotation-${quotation.referenceNumber}.pdf`;
 
     res.set({
@@ -76,7 +74,6 @@ export class PdfController {
       'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Length': buffer.length.toString(),
     });
-
     res.end(buffer);
   }
 }
